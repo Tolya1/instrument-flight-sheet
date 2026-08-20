@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SimBrief Flight Sheet</title>
+<link rel="stylesheet" href="sheet.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🛩️</text></svg>">
+</head>
+<body>
+
+<div id="toolbar" class="noprint">
+  <strong>SimBrief Flight Sheet</strong>
+  <span id="tb-flight" class="tb-dim"></span>
+  <span class="tb-spacer"></span>
+  <span id="tb-status" class="tb-dim"></span>
+  <button id="btn-refresh" title="Re-fetch SimBrief, weather and PilotEdge ATIS">↻ Refresh</button>
+  <button id="btn-print">🖨 Print</button>
+  <button id="btn-archive">Archive</button>
+  <button id="btn-settings">⚙</button>
+</div>
+
+<div id="banner-newplan" class="noprint hidden">
+  A newer SimBrief OFP was detected — <button id="btn-loadnew">load it</button>
+</div>
+
+<div id="panel-settings" class="noprint hidden">
+  <label>SimBrief userid <input id="set-userid" type="text" inputmode="numeric"></label>
+  <label>Paper
+    <select id="set-paper"><option>A4</option><option>Letter</option></select>
+  </label>
+  <button id="btn-savesettings">Save</button>
+  <button id="btn-dataRefresh" title="Re-download OurAirports CSVs and FAA NASR ILS data">Refresh airport DB</button>
+  <span id="set-dbinfo" class="tb-dim"></span>
+</div>
+
+<div id="panel-archive" class="noprint hidden"></div>
+
+<div id="err" class="noprint hidden"></div>
+
+<main id="sheet">
+  <div class="loading noprint">Building sheet…</div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "simbrief-flight-sheet",
+  "version": "2.0.0",
+  "description": "SimBrief -> printable IFR kneeboard sheet for PilotEdge flying",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  }
+}
