@@ -1,0 +1,24 @@
+services:
+  flight-sheet:
+    build: .
+    init: true
+    ports:
+      # BIND_ADDR lets you keep a personal-mode container on loopback:
+      #   PUBLIC_MODE=0 BIND_ADDR=127.0.0.1 docker compose up
+      - "${BIND_ADDR:-0.0.0.0}:${PORT:-8420}:8420"
+    environment:
+      # Selectable at startup:  PUBLIC_MODE=0 docker compose up   (or set in .env)
+      # 1 = multi-user hosting (per-visitor SimBrief id, rate limiting)
+      # 0 = personal single-user mode — NO auth and NO rate limiting, so keep
+      #     it on 127.0.0.1 (BIND_ADDR) or behind your own auth proxy.
+      PUBLIC_MODE: "${PUBLIC_MODE:-1}"
+      # Set TRUST_PROXY=1 ONLY when a reverse proxy in front sets X-Forwarded-For
+      TRUST_PROXY: "${TRUST_PROXY:-0}"
+    volumes:
+      - flight-sheet-data:/app/data
+      - flight-sheet-archive:/app/archive
+    restart: unless-stopped
+
+volumes:
+  flight-sheet-data:
+  flight-sheet-archive:

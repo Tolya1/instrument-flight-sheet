@@ -1,8 +1,17 @@
 {
   "name": "simbrief-flight-sheet",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "SimBrief -> printable IFR kneeboard sheet for PilotEdge flying",
+  "license": "MIT",
+  "author": "Marcin Kalinowski",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tolya1/instrument-flight-sheet.git"
+  },
   "main": "server.js",
+  "engines": {
+    "node": ">=18.4"
+  },
   "scripts": {
     "start": "node server.js"
   },

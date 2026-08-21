@@ -380,6 +380,43 @@ function foot(m, page) {
   </div>`;
 }
 
+/* ---------------- mode-aware storage ---------------- */
+/* Personal mode: settings + archive live on the server (single user).
+   Public mode: both live in THIS browser — the server stores nothing. */
+let publicMode = false;
+
+const LS_SETTINGS = 'sfs-settings';
+const LS_ARCHIVE = 'sfs-archive'; // [{id, generated, callsign, aircraft, from, to, model}]
+const LS_ARCHIVE_MAX = 20;
+
+function lsGet(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch (e) { return fallback; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
+}
+
+function localArchiveSave(m) {
+  if (!m.ofp || !m.ofp.requestId) return;
+  const list = lsGet(LS_ARCHIVE, []);
+  if (list.some(x => x.id === String(m.ofp.requestId))) return;
+  // strip the bulky parts render() never reads — computed.* already carries
+  // everything derived from them
+  const slim = JSON.parse(JSON.stringify(m));
+  if (slim.ofp) { slim.ofp.navlog = []; slim.ofp.tlr = null; }
+  list.unshift({
+    id: String(m.ofp.requestId), generated: m.ofp.timeGenerated,
+    callsign: m.ofp.callsign, aircraft: m.ofp.aircraft && m.ofp.aircraft.icao,
+    from: m.ofp.origin && m.ofp.origin.icao, to: m.ofp.destination && m.ofp.destination.icao,
+    model: slim,
+  });
+  while (list.length && !lsSet(LS_ARCHIVE, list.slice(0, LS_ARCHIVE_MAX))) list.pop(); // quota: shed oldest
+}
+
+function userParam() {
+  return settings.userid ? `?user=${encodeURIComponent(settings.userid)}` : '';
+}
+
 /* ---------------- render + chrome ---------------- */
 function render(m) {
   model = m;
@@ -430,12 +467,20 @@ function applyPaper() {
 }
 
 async function loadSheet() {
+  if (!settings.userid) {
+    $('#sheet').innerHTML = '';
+    $('#err').textContent = 'Enter your SimBrief userid (or alias) in Settings (⚙) to build your sheet.';
+    $('#err').classList.remove('hidden');
+    $('#panel-settings').classList.remove('hidden');
+    return;
+  }
   $('#tb-status').textContent = 'building…';
   try {
-    const res = await fetch('/api/sheet');
+    const res = await fetch('/api/sheet' + userParam());
     const m = await res.json();
     liveModel = m;
     render(m);
+    if (!m.error && publicMode) localArchiveSave(m);
     $('#tb-status').textContent = m.error ? 'error' : '';
     $('#banner-newplan').classList.add('hidden');
   } catch (e) {
@@ -445,8 +490,15 @@ async function loadSheet() {
   }
 }
 
-async function loadSettings() {
-  settings = await (await fetch('/api/settings')).json();
+async function loadConfig() {
+  const cfg = await (await fetch('/api/config')).json();
+  publicMode = !!cfg.publicMode;
+  if (publicMode) {
+    settings = { userid: '', paper: 'A4', ...lsGet(LS_SETTINGS, {}) };
+    $('#btn-dataRefresh').classList.add('hidden'); // server-wide action — not for visitors
+  } else {
+    settings = cfg.settings || { userid: '', paper: 'A4' };
+  }
   $('#set-userid').value = settings.userid;
   $('#set-paper').value = settings.paper;
   applyPaper();
@@ -454,9 +506,9 @@ async function loadSettings() {
 
 /* poll for a newer OFP */
 setInterval(async () => {
-  if (!liveModel || liveModel.error || !liveModel.ofp) return;
+  if (!liveModel || liveModel.error || !liveModel.ofp || !navigator.onLine) return;
   try {
-    const p = await (await fetch('/api/poll')).json();
+    const p = await (await fetch('/api/poll' + userParam())).json();
     if (p.timeGenerated && p.timeGenerated !== liveModel.ofp.timeGenerated) {
       $('#banner-newplan').classList.remove('hidden');
     }
@@ -475,9 +527,16 @@ $('#btn-settings').addEventListener('click', () => {
 });
 $('#btn-savesettings').addEventListener('click', async () => {
   const body = { userid: $('#set-userid').value.trim(), paper: $('#set-paper').value };
-  settings = await (await fetch('/api/settings', { method: 'POST', body: JSON.stringify(body) })).json();
+  if (publicMode) {
+    settings = { ...settings, ...body };
+    lsSet(LS_SETTINGS, settings);
+  } else {
+    settings = await (await fetch('/api/settings', { method: 'POST', body: JSON.stringify(body) })).json();
+  }
   applyPaper();
   $('#panel-settings').classList.add('hidden');
+  liveModel = null; // a user switch must not leave the poll comparing against the old plan
+  $('#banner-newplan').classList.add('hidden');
   loadSheet();
 });
 $('#btn-dataRefresh').addEventListener('click', () => {
@@ -487,14 +546,17 @@ $('#btn-dataRefresh').addEventListener('click', () => {
 $('#btn-archive').addEventListener('click', async () => {
   const panel = $('#panel-archive');
   if (!panel.classList.contains('hidden')) { panel.classList.add('hidden'); return; }
-  const list = await (await fetch('/api/archive')).json();
+  const list = publicMode ? lsGet(LS_ARCHIVE, []) : await (await fetch('/api/archive')).json();
   panel.innerHTML = list.length
     ? `<table><tr><th>OFP</th><th>Generated</th><th>Flight</th><th></th></tr>${list.map(x =>
       `<tr><td>${esc(x.id)}</td><td>${esc(x.generated || '')}</td><td>${esc(x.callsign || '')} ${esc(x.from || '')}→${esc(x.to || '')} (${esc(x.aircraft || '')})</td><td><a data-id="${esc(x.id)}">open</a></td></tr>`).join('')}</table>`
     : 'No archived sheets yet.';
   panel.classList.remove('hidden');
   panel.querySelectorAll('a[data-id]').forEach(a => a.addEventListener('click', async () => {
-    const m = await (await fetch('/api/archive/' + a.dataset.id)).json();
+    const m = publicMode
+      ? (lsGet(LS_ARCHIVE, []).find(x => x.id === a.dataset.id) || {}).model
+      : await (await fetch('/api/archive/' + a.dataset.id)).json();
+    if (!m) return;
     render(m);
     $('#tb-status').textContent = `ARCHIVED sheet ${a.dataset.id} — Refresh returns to live`;
     panel.classList.add('hidden');
@@ -502,7 +564,17 @@ $('#btn-archive').addEventListener('click', async () => {
 });
 
 /* boot */
-(async () => {
-  await loadSettings();
+async function boot() {
+  try {
+    await loadConfig();
+  } catch (e) {
+    $('#sheet').innerHTML = '';
+    $('#err').textContent = 'Cannot reach server (' + e.message + ') — retrying in 5 s…';
+    $('#err').classList.remove('hidden');
+    setTimeout(boot, 5000);
+    return;
+  }
+  $('#err').classList.add('hidden');
   await loadSheet();
-})();
+}
+boot();
