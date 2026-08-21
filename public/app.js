@@ -174,7 +174,7 @@ function frontPage(m) {
       <div class="box craft">
         <h3>Craft clearance</h3>
         <div class="row"><div class="letter">C</div><div class="val">${esc(o.destination ? o.destination.icao : '')}</div></div>
-        <div class="row"><div class="letter">R</div><div class="val route">${esc(o.route || '')}</div></div>
+        <div class="row"><div class="letter">R</div><div>${hw('as filed (route above) — write reroute if given')}</div></div>
         <div class="row"><div class="letter">A</div><div>${hw(`filed ${altFmt(o.cruiseAltitude)}${o.sid ? ` · SID ${esc(o.sid)}` : ''}`)}</div></div>
         <div class="row"><div class="letter">F</div><div>${hw(craftFHint)}</div></div>
         <div class="row"><div class="letter">T</div><div>${hw('')}</div></div>
