@@ -42,6 +42,20 @@ Mount/keep `data/` (compose does) so the ~20 MB of airport data isn't
 re-downloaded on every restart; it self-refreshes weekly (CSVs) and per
 28-day AIRAC cycle (FAA ILS data).
 
+## Development
+
+`npm test` runs the verification suite (Node's built-in runner, no extra
+deps): parser/math unit tests, mock regional flights (US/EU/Asia/Africa/
+Oceania) through the real pipeline, and data-presence checks against the
+local databases. `LIVE=1 npm test` adds real-upstream smoke tests. Known
+regional gaps are `todo` tests — visible in every run until implemented.
+Agent-facing process notes live in [CLAUDE.md](CLAUDE.md); private
+deployment targets belong in a gitignored `CLAUDE.local.md`.
+
+Optional: with a Navigraph subscription and X-Plane, `tools/extract-navdata.js`
+builds a worldwide AIRAC-current ILS dataset from your own installed navdata
+(personal use only — the output stays in gitignored `data/`).
+
 ## Data sources (all keyless)
 
 - **SimBrief** `xml.fetcher.php?userid=...&json=v2` — OFP, weights, fuel,
