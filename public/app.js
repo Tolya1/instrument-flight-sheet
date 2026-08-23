@@ -375,7 +375,7 @@ function backPage(m) {
 function foot(m, page) {
   const s = m.status || {};
   return `<div class="foot">
-    <span>OFP ${esc(m.ofp.requestId || '')} gen ${esc(m.ofp.timeGenerated || '')} · sheet built ${esc(m.builtAt ? m.builtAt.slice(0, 16).replace('T', ' ') + 'Z' : '')} · SimBrief: ${esc(s.simbrief || '')} · wx: ${esc(s.wx || '')} · PE: ${esc(s.peAtis || '')}</span>
+    <span>OFP ${esc(m.ofp.requestId || '')} gen ${esc(m.ofp.timeGenerated || '')} · sheet built ${esc(m.builtAt ? m.builtAt.slice(0, 16).replace('T', ' ') + 'Z' : '')} · SimBrief: ${esc(s.simbrief || '')} · wx: ${esc(s.wx || '')} · PE: ${esc(s.peAtis || '')} · ILS: ${esc(s.ils || '')}</span>
     <span>p.${page}</span>
   </div>`;
 }
@@ -522,7 +522,7 @@ $('#btn-print').addEventListener('click', () => window.print());
 $('#btn-settings').addEventListener('click', () => {
   $('#panel-settings').classList.toggle('hidden');
   fetch('/api/data/status').then(r => r.json()).then(s => {
-    $('#set-dbinfo').textContent = `${s.airportCount} airports · ${s.ilsCount} ILS · NASR ${s.ilsCycle || '—'}${s.lastError ? ' · ' + s.lastError : ''}`;
+    $('#set-dbinfo').textContent = `${s.airportCount} airports · ILS: ${s.ilsSource || (s.ilsCount + ' NASR')}${s.navIlsCount ? ` (${s.navIlsCount} worldwide)` : ''}${s.lastError ? ' · ' + s.lastError : ''}`;
   }).catch(() => {});
 });
 $('#btn-savesettings').addEventListener('click', async () => {

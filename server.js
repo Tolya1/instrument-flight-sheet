@@ -227,8 +227,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/data/refresh' && req.method === 'POST') {
       if (PUBLIC_MODE) return sendJson(res, 403, { error: 'disabled in public mode' });
-      airports.init({ force: true }).catch(() => {});
-      return sendJson(res, 202, { refreshing: true });
+      // force=0 -> reindex only (picks up a new navdata-ils.json without re-downloading CSVs)
+      const force = url.searchParams.get('force') !== '0';
+      airports.init({ force }).catch(() => {});
+      return sendJson(res, 202, { refreshing: true, force });
     }
 
     // static — resolve, then require the result to stay inside public/
