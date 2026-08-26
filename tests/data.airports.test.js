@@ -78,6 +78,29 @@ test('navdata cycle is not expired', { skip: !HAVE_NAVDATA && 'no navdata-ils.js
   assert.ok(!/EXPIRED/.test(s.ilsSource), `stale AIRAC: ${s.ilsSource} — run update-navdata.cmd`);
 });
 
+test('nav-band frequencies: VOR-ATIS kept and flagged, comm types never below 118', { skip: !HAVE_DATA && 'data/ not populated' }, () => {
+  // Australia's AERIS: ATIS over VORs (YSSY 115.55, YBBN 113.2) — must be
+  // present but flagged navBand so the sheet says "tune NAV radio".
+  const yssy = airports.airportInfo('YSSY');
+  const atis = yssy.freqs.find(f => f.type === 'ATIS');
+  assert.ok(atis, 'YSSY has an ATIS row');
+  assert.ok(atis.mhz < 118, 'YSSY ATIS is in the nav band (data as expected)');
+  assert.equal(atis.navBand, true, 'nav-band ATIS carries the flag');
+  // No airport in the roster may list a comm position below 118.0 MHz.
+  for (const rows of Object.values(ROSTER)) {
+    for (const [icao] of rows) {
+      const info = airports.airportInfo(icao);
+      if (!info) continue;
+      for (const f of info.freqs) {
+        if (!['ATIS', 'AWOS', 'ASOS'].includes(f.type)) {
+          assert.ok(f.mhz >= 118, `${icao}: ${f.type} ${f.mhz} is below the comm band`);
+        }
+        if (f.navBand) assert.ok(f.mhz < 118, `${icao}: navBand flag only below 118`);
+      }
+    }
+  }
+});
+
 test('US non-ICAO ident resolution (L35-style fields)', { skip: !HAVE_DATA && 'data/ not populated' }, () => {
   assert.ok(airports.resolveIdent('L35'), 'L35 (Big Bear) resolves');
   assert.ok(airports.airportInfo('L35').elevation > 6000, 'Big Bear elevation sane');

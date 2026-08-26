@@ -56,9 +56,10 @@ function freqTable(info, mode) {
   }
   return `<table class="freq">${rows.map(f => {
     const d = freqDesc(f);
+    const nav = f.navBand ? ` <span class="f-desc">— VOR broadcast, tune NAV radio</span>` : '';
     return `
     <tr>
-      <td><span class="f-label">${esc(f.label)}</span>${d ? ` <span class="f-desc">${esc(d)}</span>` : ''}</td>
+      <td><span class="f-label">${esc(f.label)}</span>${d ? ` <span class="f-desc">${esc(d)}</span>` : ''}${nav}</td>
       <td class="f-mhz">${f.mhz.toFixed(Math.round(f.mhz * 1000) % 10 ? 3 : 2)}</td>
     </tr>`;
   }).join('')}</table>`;
