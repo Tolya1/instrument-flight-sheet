@@ -110,7 +110,8 @@ function wxBox(title, side, apInfo) {
   const p = wx.parsed || {};
   const stale = wx.stale && wx.ageMin != null ? `<span class="stale">⚠ ${wx.ageMin} min old</span>`
     : wx.ageMin != null ? `<span class="hw-hint">${wx.ageMin} min old</span>` : `<span class="stale">⚠ obs time unknown</span>`;
-  const pe = side.pe ? `<div class="pe-atis">PE ATIS <b>${esc(side.pe.letter || '?')}</b>${side.pe.departingRunways ? ` · dep rwy ${esc(side.pe.departingRunways)}` : ''}${side.pe.arrivingRunways ? ` · arr rwy ${esc(side.pe.arrivingRunways)}` : ''}${side.pe.approaches ? `<br>${esc(side.pe.approaches)}` : ''}</div>` : '';
+  const na = side.netAtis;
+  const pe = na ? `<div class="pe-atis">${esc(na.net)} ATIS <b>${esc(na.letter || '?')}</b>${na.departingRunways ? ` · dep rwy ${esc(na.departingRunways)}` : ''}${na.arrivingRunways && na.arrivingRunways !== na.departingRunways ? ` · arr rwy ${esc(na.arrivingRunways)}` : na.arrivingRunways && !na.departingRunways ? ` · arr rwy ${esc(na.arrivingRunways)}` : ''}${na.approaches ? `<br>${esc(na.approaches)}` : ''}</div>` : '';
   return `<div class="box wx">
     <h3>${esc(title)} <span class="h-note">${wx.source === 'awc' ? 'live' : 'from OFP'} · ${stale}</span></h3>
     <div class="raw">${esc(wx.raw)}</div>
@@ -144,7 +145,7 @@ function frontPage(m) {
       <div class="mid">
         <div class="callsign">${esc(o.callsign || '')}</div>
         <div class="subline">${esc(o.aircraft.icao || '')}${o.aircraft.reg ? ' ' + esc(o.aircraft.reg) : ''} / ${o.flightRules === 'I' ? 'IFR' : esc(o.flightRules)} / ${esc(o.timeGenerated || '')}</div>
-        <div class="subline">AIRAC ${esc(o.airac || '—')} · ${esc(o.routeDistance != null ? o.routeDistance + ' NM' : '')}</div>
+        <div class="subline">AIRAC ${esc(o.airac || '—')} · ${esc(o.routeDistance != null ? o.routeDistance + ' NM' : '')} · <b>${esc(netLabel(m.network))}</b></div>
       </div>
       <div class="side arr">
         <div class="tag">ARR</div>
@@ -200,7 +201,7 @@ function frontPage(m) {
       <div class="box">
         <h3>Departure</h3>
         <div class="kv">
-          ${kvHwRow('Runway', dep.likelyRwys.length ? `${dep.pe ? 'PE active' : 'planned'}: ${esc(dep.likelyRwys.join(', '))}` : '')}
+          ${kvHwRow('Runway', dep.likelyRwys.length ? `${dep.netAtis ? esc(dep.netAtis.net) + ' active' : 'planned'}: ${esc(dep.likelyRwys.join(', '))}` : '')}
           ${kvHwRow('SID', o.sid ? `filed: ${esc(o.sid)}${o.sidTrans ? '.' + esc(o.sidTrans) : ''}` : 'none filed')}
           ${kvHwRow('Initial alt', `filed ${altFmt(o.cruiseAltitude)}`)}
           ${kvHwRow('Transition', '')}
@@ -214,8 +215,8 @@ function frontPage(m) {
         <h3>Arrival</h3>
         <div class="kv">
           ${kvHwRow('STAR', o.star ? `filed: ${esc(o.star)}${o.starTrans ? ' via ' + esc(o.starTrans) : ''}` : 'none filed')}
-          ${kvHwRow('Approach', arr.pe && arr.pe.approaches ? `PE: ${esc(arr.pe.approaches)}` : '')}
-          ${kvHwRow('Runway', arr.likelyRwys.length ? `${arr.pe ? 'PE active' : 'planned'}: ${esc(arr.likelyRwys.join(', '))}` : '')}
+          ${kvHwRow('Approach', arr.netAtis && arr.netAtis.approaches ? `${esc(arr.netAtis.net)}: ${esc(arr.netAtis.approaches)}` : '')}
+          ${kvHwRow('Runway', arr.likelyRwys.length ? `${arr.netAtis ? esc(arr.netAtis.net) + ' active' : 'planned'}: ${esc(arr.likelyRwys.join(', '))}` : '')}
           ${kvHwRow('Minimums', '')}
           ${kvRow('Landing fuel', wPair(o.fuel.landing, o.units))}
         </div>
@@ -234,6 +235,8 @@ function frontPage(m) {
         ${airportInfoLines(arr.info)}
       </div>
     </div>
+
+    ${vatsimBoxes(m)}
 
     <div class="cols2">
       ${wxBox('Dep wx — ' + (o.origin ? o.origin.icao : ''), dep, dep.info)}
@@ -352,15 +355,7 @@ function backPage(m) {
         </ul>
       </div>
       <div class="box">
-        <h3>PilotEdge notes</h3>
-        <div class="lostcomms">
-          <ul style="margin:0;padding-left:4mm">
-            <li>ATC staffed <b>08:00–23:00 Pacific</b> daily; unstaffed field → real-world CTAF, self-announce.</li>
-            <li>Freqs on this sheet are current real-world FAA — exactly what PE uses.</li>
-            <li>ATIS letters roll hourly — re-check before clearance and before approach.</li>
-            <li>IFR in Class B/C: expect full route readback; taxi: read back rwy + hold short verbatim.</li>
-          </ul>
-        </div>
+        ${networkNotes(m.network)}
       </div>
     </div>
 
@@ -371,6 +366,65 @@ function backPage(m) {
 
     ${foot(m, 2)}
   </section>`;
+}
+
+const NET_NAMES = { pilotedge: 'PilotEdge', sayintentions: 'SayIntentions', vatsim: 'VATSIM' };
+
+// Live VATSIM box: who is actually online + the frequency to tune (the feed
+// number wins over real-world charts on VATSIM). Empty side -> UNICOM hint.
+function vatsimSide(title, side) {
+  if (!side) return '';
+  const rows = (side.positions || []).map(p => `
+    <tr><td><span class="f-label">${esc(p.label)}</span> <span class="f-desc">${esc(p.callsign)}${p.overlying ? ' (overlying)' : ''}</span></td>
+    <td class="f-mhz">${esc(p.mhz)}</td></tr>`).join('');
+  const atis = (side.atis || []).map(a => `
+    <tr><td><span class="f-label">ATIS${a.kind !== 'ATIS' ? ' ' + esc(a.kind) : ''}</span> <span class="f-desc">info ${esc(a.letter || '—')}</span></td>
+    <td class="f-mhz">${esc(a.mhz)}</td></tr>`).join('');
+  return `<div class="box">
+    <h3>${esc(title)} <span class="h-note">VATSIM live</span></h3>
+    ${rows || atis ? `<table class="freq">${atis}${rows}</table>` : `<div class="hw-hint">no ATC online — UNICOM 122.800, self-announce</div>`}
+  </div>`;
+}
+function vatsimBoxes(m) {
+  if (!m.vatsim) return '';
+  return `<div class="cols2">
+    ${vatsimSide('Online ATC — ' + (m.ofp.origin ? m.ofp.origin.icao : ''), m.vatsim.dep)}
+    ${vatsimSide('Online ATC — ' + (m.ofp.destination ? m.ofp.destination.icao : ''), m.vatsim.arr)}
+  </div>`;
+}
+function netLabel(net) {
+  if (!net) return '';
+  return NET_NAMES[net.resolved] + (net.selected === 'auto' ? ' (auto)' : '');
+}
+
+// Back-page network notes — content varies by where you're flying tonight.
+function networkNotes(net) {
+  const n = net && net.resolved;
+  if (n === 'pilotedge') {
+    return `<h3>PilotEdge notes</h3><div class="lostcomms"><ul style="margin:0;padding-left:4mm">
+      <li>ATC staffed <b>08:00–23:00 Pacific</b> daily; unstaffed field → real-world CTAF, self-announce.</li>
+      <li>Freqs on this sheet are current real-world FAA — exactly what PE uses.</li>
+      <li>ATIS letters roll hourly — re-check before clearance and before approach.</li>
+      <li>IFR in Class B/C: expect full route readback; taxi: read back rwy + hold short verbatim.</li>
+    </ul></div>`;
+  }
+  if (n === 'sayintentions') {
+    return `<h3>SayIntentions notes</h3><div class="lostcomms"><ul style="margin:0;padding-left:4mm">
+      <li>Global 24/7; SI uses Navigraph AIRAC freqs — this sheet's numbers match. Positions with several published freqs: SI accepts <b>any</b> of them.</li>
+      <li>SI picks its <b>own</b> active runways (may differ from real-world flow) — the SI ATIS line on this sheet is the authority.</li>
+      <li>SI reads your SimBrief plan — IFR requires it filed before connecting; clearance will match this sheet.</li>
+      <li>Intra-European Mode S flights: squawk <b>1000</b> is normal, not an error.</li>
+      <li>X-Plane: ATIS on VOR freqs (below 118.0) is not audible — read it off this sheet instead.</li>
+    </ul></div>`;
+  }
+  if (n === 'vatsim') {
+    return `<h3>VATSIM notes</h3><div class="lostcomms"><ul style="margin:0;padding-left:4mm">
+      <li>Staffing is ad-hoc — check who's online; top-down service: a CTR may cover your field.</li>
+      <li>Controllers' live frequencies can differ from published — trust the feed/controller info line.</li>
+      <li>No ATC online → UNICOM <b>122.800</b>, self-announce (text).</li>
+    </ul></div>`;
+  }
+  return `<h3>Network notes</h3><div class="hw-hint">no network selected</div>`;
 }
 
 function foot(m, page) {
@@ -415,7 +469,8 @@ function localArchiveSave(m) {
 }
 
 function userParam() {
-  return settings.userid ? `?user=${encodeURIComponent(settings.userid)}` : '';
+  const net = settings.network && settings.network !== 'auto' ? `&network=${encodeURIComponent(settings.network)}` : '';
+  return settings.userid ? `?user=${encodeURIComponent(settings.userid)}${net}` : '';
 }
 
 /* ---------------- render + chrome ---------------- */
@@ -495,13 +550,15 @@ async function loadConfig() {
   const cfg = await (await fetch('/api/config')).json();
   publicMode = !!cfg.publicMode;
   if (publicMode) {
-    settings = { userid: '', paper: 'A4', ...lsGet(LS_SETTINGS, {}) };
+    settings = { userid: '', paper: 'A4', network: 'auto', ...lsGet(LS_SETTINGS, {}) };
     $('#btn-dataRefresh').classList.add('hidden'); // server-wide action — not for visitors
   } else {
-    settings = cfg.settings || { userid: '', paper: 'A4' };
+    settings = { network: 'auto', ...(cfg.settings || { userid: '', paper: 'A4' }) };
   }
   $('#set-userid').value = settings.userid;
   $('#set-paper').value = settings.paper;
+  $('#set-sikey').value = settings.siApiKey || '';
+  $('#tb-network').value = settings.network || 'auto';
   applyPaper();
 }
 
@@ -517,6 +574,14 @@ setInterval(async () => {
 }, 90000);
 
 /* toolbar wiring */
+$('#tb-network').addEventListener('change', async () => {
+  settings.network = $('#tb-network').value;
+  if (publicMode) lsSet(LS_SETTINGS, settings);
+  else await fetch('/api/settings', { method: 'POST', body: JSON.stringify({ network: settings.network }) });
+  liveModel = null;
+  $('#banner-newplan').classList.add('hidden');
+  loadSheet();
+});
 $('#btn-refresh').addEventListener('click', loadSheet);
 $('#btn-loadnew').addEventListener('click', loadSheet);
 $('#btn-print').addEventListener('click', () => window.print());
@@ -527,7 +592,7 @@ $('#btn-settings').addEventListener('click', () => {
   }).catch(() => {});
 });
 $('#btn-savesettings').addEventListener('click', async () => {
-  const body = { userid: $('#set-userid').value.trim(), paper: $('#set-paper').value };
+  const body = { userid: $('#set-userid').value.trim(), paper: $('#set-paper').value, siApiKey: $('#set-sikey').value.trim() };
   if (publicMode) {
     settings = { ...settings, ...body };
     lsSet(LS_SETTINGS, settings);

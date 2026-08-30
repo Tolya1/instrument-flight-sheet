@@ -65,3 +65,12 @@ test('day-of-month rollover never produces a future obsTime (review fix #1)', ()
   const age = metarAgeMin(p);
   if (age !== null) assert.ok(age >= 0, `obsTime resolved into the future (age ${age} min)`);
 });
+
+test('an obs time later today resolves to last month, never the future', () => {
+  // Dynamic: stamp a METAR ~2h ahead of "now" — whatever day the suite runs.
+  const f = new Date(Date.now() + 2 * 3600 * 1000);
+  const tok = `${String(f.getUTCDate()).padStart(2, '0')}${String(f.getUTCHours()).padStart(2, '0')}${String(f.getUTCMinutes()).padStart(2, '0')}Z`;
+  const p = parseMetar(`KGEG ${tok} 25003KT 8SM CLR 15/05 A3000`);
+  const age = metarAgeMin(p);
+  if (age !== null) assert.ok(age >= -60, `future-stamped obs not rolled back (age ${age} min)`);
+});

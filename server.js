@@ -20,7 +20,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const airports = require('./lib/airports');
-const { buildSheet } = require('./lib/sheetmodel');
+const { buildSheet, NETWORKS } = require('./lib/sheetmodel');
 const { fetchOfp, validUser } = require('./lib/simbrief');
 const archive = require('./lib/archive');
 
@@ -175,7 +175,13 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/sheet' && req.method === 'GET') {
       const user = resolveUser(url);
       if (!user) return sendJson(res, 400, { error: 'missing or invalid SimBrief userid/alias — set it in Settings' });
-      const model = await buildSheet(user, { diskCache: !PUBLIC_MODE });
+      const netParam = (url.searchParams.get('network') || '').toLowerCase();
+      const network = NETWORKS.includes(netParam) ? netParam
+        : (!PUBLIC_MODE && NETWORKS.includes(readSettings().network) ? readSettings().network : 'auto');
+      // SI auth is the pilot's own key — personal mode only, never for visitors
+      const s = readSettings();
+      const siAuth = PUBLIC_MODE ? null : { apiKey: s.siApiKey || '', localUrl: s.siLocalUrl || '' };
+      const model = await buildSheet(user, { diskCache: !PUBLIC_MODE, network, siAuth });
       if (!model.error && !PUBLIC_MODE) {
         model.archived = archive.save(model);
       }
@@ -204,6 +210,9 @@ const server = http.createServer(async (req, res) => {
       const s = readSettings();
       if (typeof body.userid === 'string' && (body.userid === '' || validUser(body.userid.trim()))) s.userid = body.userid.trim();
       if (body.paper === 'A4' || body.paper === 'Letter') s.paper = body.paper;
+      if (NETWORKS.includes(body.network)) s.network = body.network;
+      if (typeof body.siApiKey === 'string' && (body.siApiKey === '' || /^[A-Za-z0-9_-]{8,128}$/.test(body.siApiKey))) s.siApiKey = body.siApiKey;
+      if (typeof body.siLocalUrl === 'string' && (body.siLocalUrl === '' || /^https?:\/\/[\w.:\/-]+$/.test(body.siLocalUrl))) s.siLocalUrl = body.siLocalUrl;
       writeSettings(s);
       return sendJson(res, 200, s);
     }

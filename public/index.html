@@ -14,7 +14,13 @@
   <span id="tb-flight" class="tb-dim"></span>
   <span class="tb-spacer"></span>
   <span id="tb-status" class="tb-dim"></span>
-  <button id="btn-refresh" title="Re-fetch SimBrief, weather and PilotEdge ATIS">↻ Refresh</button>
+  <label class="tb-dim">Network <select id="tb-network">
+    <option value="auto">Auto (PE in coverage → SI)</option>
+    <option value="pilotedge">PilotEdge</option>
+    <option value="sayintentions">SayIntentions</option>
+    <option value="vatsim">VATSIM</option>
+  </select></label>
+  <button id="btn-refresh" title="Re-fetch SimBrief, weather and network data">↻ Refresh</button>
   <button id="btn-print">🖨 Print</button>
   <button id="btn-archive">Archive</button>
   <button id="btn-settings">⚙</button>
@@ -29,6 +35,7 @@
   <label>Paper
     <select id="set-paper"><option>A4</option><option>Letter</option></select>
   </label>
+  <label>SayIntentions API key <input id="set-sikey" type="text" spellcheck="false" placeholder="auto from SI app when running"></label>
   <button id="btn-savesettings">Save</button>
   <button id="btn-dataRefresh" title="Re-download OurAirports CSVs and FAA NASR ILS data">Refresh airport DB</button>
   <span id="set-dbinfo" class="tb-dim"></span>

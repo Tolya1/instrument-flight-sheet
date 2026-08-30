@@ -17,7 +17,7 @@ function makeOfp(o) {
       route_distance: '250', avg_wind_comp: o.avgWind !== undefined ? o.avgWind : '10',
       sid_ident: '', star_ident: '', passengers: '2', costindex: '10',
     },
-    atc: { callsign: 'TEST01', route: o.route || 'DCT', flight_rules: 'I' },
+    atc: { callsign: 'TEST01', route: o.route || 'DCT', flight_rules: 'I', fir_orig: o.firFrom || '', fir_dest: o.firTo || '' },
     aircraft: { icaocode: 'B350', name: 'King Air 350', reg: 'N875AT', supports_tlr: '0' },
     origin: {
       icao_code: o.from, name: o.fromName || o.from, elevation: String(o.fromElev ?? 100),
@@ -117,5 +117,21 @@ test('stale/future observation flags (never a silent stale altimeter)', () => {
 // ---- Known regional gaps, on the record until implemented ----
 test('altimeter PRIMARY unit should follow the METAR group (Q -> hPa first)', { todo: 'client renders inHg-first everywhere; planned: auto-detect from A/Q group' }, () => {});
 test('lost-comms crib should be region-appropriate (91.185 is FAA-only)', { todo: 'client back page is static FAA text; planned: per-region static content by ICAO prefix' }, () => {});
-test('PilotEdge notes/flow strip should hide outside PE coverage', { todo: 'client always prints PE notes; planned: gate on dep/arr FIR or PE coverage list' }, () => {});
+test('network auto-resolution: PE inside coverage, SayIntentions outside, manual wins', () => {
+  const { resolveNetwork } = require('../lib/sheetmodel');
+  const pe = normalizeOfp(makeOfp({ from: 'KSAN', to: 'KSBA', firFrom: 'KZLA', firTo: 'KZLA' }));
+  assert.equal(resolveNetwork('auto', pe).resolved, 'pilotedge');
+  const eu = normalizeOfp(makeOfp({ from: 'EPWA', to: 'EDDF', firFrom: 'EPWW', firTo: 'EDGG' }));
+  assert.equal(resolveNetwork('auto', eu).resolved, 'sayintentions');
+  // leaving PE coverage mid-selection: KSAN -> KDEN is in (KZLA/KZDV both covered)
+  const west = normalizeOfp(makeOfp({ from: 'KSAN', to: 'KDEN', firFrom: 'KZLA', firTo: 'KZDV' }));
+  assert.equal(resolveNetwork('auto', west).resolved, 'pilotedge');
+  // ...but KSAN -> KDFW leaves it (KZFW not covered)
+  const east = normalizeOfp(makeOfp({ from: 'KSAN', to: 'KDFW', firFrom: 'KZLA', firTo: 'KZFW' }));
+  assert.equal(resolveNetwork('auto', east).resolved, 'sayintentions');
+  // manual override beats auto; missing FIRs default to SI, never PE
+  assert.equal(resolveNetwork('vatsim', pe).resolved, 'vatsim');
+  const noFir = normalizeOfp(makeOfp({ from: 'KSAN', to: 'KSBA' }));
+  assert.equal(resolveNetwork('auto', noFir).resolved, 'sayintentions');
+});
 test('runway dimensions should show meters outside the US', { todo: 'client prints feet only; planned: dual ft/m for non-K/P idents' }, () => {});
