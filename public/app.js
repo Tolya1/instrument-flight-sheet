@@ -79,13 +79,15 @@ function freqTable(info, mode) {
   }).join('')}</table>`;
 }
 
-function airportInfoLines(info) {
+// showIls: false on the departure side — approach aids are dead weight when
+// you're leaving; the arrival and alternate blocks keep them.
+function airportInfoLines(info, { showIls = true } = {}) {
   if (!info) return `<div class="hw-hint">airport not in database</div>`;
   const rwys = info.runways.map(r => {
     const likelyEnd = r.ends.find(e => e.likely);
     const pair = `${esc(r.leIdent)}/${esc(r.heIdent)}`;
     const dims = r.lengthFt ? `${r.lengthFt.toLocaleString('en-US')}×${r.widthFt || '?'} ${esc((r.surface || '').slice(0, 4).toUpperCase())}` : '';
-    const ils = r.ends.filter(e => e.ils).map(e =>
+    const ils = !showIls ? '' : r.ends.filter(e => e.ils).map(e =>
       `<span class="ils">${e.ils.type && /LOC/i.test(e.ils.type) && !/ILS/i.test(e.ils.type) ? 'LOC' : 'ILS'} ${esc(e.ident)} ${e.ils.locFreq.toFixed(2).replace(/0$/, '')}${e.ils.course != null ? ` c${String(e.ils.course).padStart(3, '0')}°` : ''}</span>`
     ).join(' · ');
     return `<div class="rwyline"><span>${likelyEnd ? `<span class="likely">${pair}</span>` : pair} ${dims}</span><span>${ils}</span></div>`;
@@ -241,7 +243,7 @@ function frontPage(m) {
       <div class="box">
         <h3>Dep frequencies · ${esc(o.origin ? o.origin.icao : '')}${dep.siFreqs ? ' <span class="h-note">SI</span>' : ''}</h3>
         ${dep.siFreqs ? siFreqTable(dep.siFreqs) : freqTable(dep.info, 'dep')}
-        ${airportInfoLines(dep.info)}
+        ${airportInfoLines(dep.info, { showIls: false })}
       </div>
       <div class="box">
         <h3>Arr frequencies · ${esc(o.destination ? o.destination.icao : '')}${arr.siFreqs ? ' <span class="h-note">SI</span>' : ''}</h3>
