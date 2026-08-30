@@ -231,7 +231,7 @@ const server = http.createServer(async (req, res) => {
       const s = airports.status();
       // visitors get counts only; internal error strings/paths stay private
       return sendJson(res, 200, PUBLIC_MODE
-        ? { airportCount: s.airportCount, ilsCount: s.ilsCount, ilsCycle: s.ilsCycle }
+        ? { airportCount: s.airportCount, ilsCount: s.ilsCount, ilsCycle: s.ilsCycle, ilsSource: s.ilsSource }
         : s);
     }
     if (p === '/api/data/refresh' && req.method === 'POST') {
