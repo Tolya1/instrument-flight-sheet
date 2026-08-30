@@ -65,6 +65,32 @@ test('null-callsign slot 1 is NOT hidden (EGLL ground, YSSY tower)', () => {
   assert.deepEqual(collapseComms(YSSY_COMMS).find(r => r.type === 'GND').all, [121.7]);
 });
 
+test('VOR-band ATIS is demoted: the printed freq must be COM-tunable', () => {
+  // KJFK really lists ATIS 115.4 / 117.7 / 128.725; SI's own panel shows
+  // 128.725. 115.4 and 117.7 are VOR broadcasts, untunable on a COM radio.
+  const jfk = collapseComms([
+    { callsign: null, freq: '115.4', type: 'ATIS' },
+    { callsign: null, freq: '117.7', type: 'ATIS' },
+    { callsign: null, freq: '128.725', type: 'ATIS' },
+  ]).find(r => r.type === 'ATIS');
+  assert.equal(jfk.mhz, 128.725, 'COM-band ATIS printed, matching SI');
+  assert.equal(jfk.navBand, false);
+  assert.deepEqual(jfk.all, [128.725, 115.4, 117.7], 'nav-band kept but demoted');
+
+  // KSFO: 113.7 / 115.8 / 118.85 -> 118.85 printed (115.8 hidden by SI)
+  const sfo = collapseComms([
+    { callsign: null, freq: '113.7', type: 'ATIS' },
+    { callsign: null, freq: '115.8', type: 'ATIS' },
+    { callsign: null, freq: '118.85', type: 'ATIS' },
+  ]).find(r => r.type === 'ATIS');
+  assert.equal(sfo.mhz, 118.85);
+
+  // All-nav-band (Australian AERIS style): print it, but flagged
+  const aeris = collapseComms([{ callsign: null, freq: '115.55', type: 'ATIS' }]).find(r => r.type === 'ATIS');
+  assert.equal(aeris.mhz, 115.55);
+  assert.equal(aeris.navBand, true, 'flagged so the sheet says tune NAV radio');
+});
+
 test('SI comms: ramp/air dropped, duplicates deduped, kneeboard order', () => {
   const rows = collapseComms([...KOAK_COMMS, { callsign: 'LAX', freq: '129.325', type: 'RMP' }]);
   assert.ok(!rows.some(r => r.type === 'RMP'), 'ramp control is noise on a kneeboard');

@@ -57,7 +57,7 @@ function siFreqTable(rows) {
   if (!rows || !rows.length) return `<div class="hw-hint">no SI frequency data</div>`;
   return `<table class="freq">${rows.map(f => `
     <tr>
-      <td><span class="f-label">${esc(f.label)}</span>${f.callsign ? ` <span class="f-desc">${esc(f.callsign)}</span>` : ''}${f.live ? ' <span class="f-desc">live</span>' : ''}${f.altCount ? ` <span class="f-desc">alt ${esc(f.all.slice(1).map(x => x.toFixed(x * 100 % 10 ? 3 : 2)).join('/'))}</span>` : ''}</td>
+      <td><span class="f-label">${esc(f.label)}</span>${f.callsign ? ` <span class="f-desc">${esc(f.callsign)}</span>` : ''}${f.live ? ' <span class="f-desc">live</span>' : ''}${f.navBand ? ' <span class="f-desc">— VOR broadcast, tune NAV radio</span>' : ''}${f.altCount ? ` <span class="f-desc">alt ${esc(f.all.slice(1).map(x => x.toFixed(x * 100 % 10 ? 3 : 2)).join('/'))}</span>` : ''}</td>
       <td class="f-mhz">${f.mhz.toFixed(Math.round(f.mhz * 1000) % 10 ? 3 : 2)}</td>
     </tr>`).join('')}</table>`;
 }
