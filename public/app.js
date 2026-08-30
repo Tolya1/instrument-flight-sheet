@@ -48,6 +48,20 @@ function freqDesc(f) {
   if ((REDUNDANT_DESC[f.type] || []).includes(d.toUpperCase())) return '';
   return d;
 }
+// SayIntentions mode: one frequency per position, taken from SI's OWN comms
+// list (so the number is one SI knows). Where SI lists several for a position
+// — KOAK Tower 118.3/127.2, KLAX 120.95/133.9 — its ordering is numeric, not
+// priority, so the alternate is kept as a tiny fallback note rather than
+// pretending the printed one is certain.
+function siFreqTable(rows) {
+  if (!rows || !rows.length) return `<div class="hw-hint">no SI frequency data</div>`;
+  return `<table class="freq">${rows.map(f => `
+    <tr>
+      <td><span class="f-label">${esc(f.label)}</span>${f.callsign ? ` <span class="f-desc">${esc(f.callsign)}</span>` : ''}${f.live ? ' <span class="f-desc">live</span>' : ''}${f.altCount ? ` <span class="f-desc">alt ${esc(f.all.slice(1).map(x => x.toFixed(x * 100 % 10 ? 3 : 2)).join('/'))}</span>` : ''}</td>
+      <td class="f-mhz">${f.mhz.toFixed(Math.round(f.mhz * 1000) % 10 ? 3 : 2)}</td>
+    </tr>`).join('')}</table>`;
+}
+
 function freqTable(info, mode) {
   if (!info || !info.freqs.length) return `<div class="hw-hint">no frequency data</div>`;
   let rows = info.freqs;
@@ -225,13 +239,13 @@ function frontPage(m) {
 
     <div class="cols2">
       <div class="box">
-        <h3>Dep frequencies · ${esc(o.origin ? o.origin.icao : '')}</h3>
-        ${freqTable(dep.info, 'dep')}
+        <h3>Dep frequencies · ${esc(o.origin ? o.origin.icao : '')}${dep.siFreqs ? ' <span class="h-note">SI</span>' : ''}</h3>
+        ${dep.siFreqs ? siFreqTable(dep.siFreqs) : freqTable(dep.info, 'dep')}
         ${airportInfoLines(dep.info)}
       </div>
       <div class="box">
-        <h3>Arr frequencies · ${esc(o.destination ? o.destination.icao : '')}</h3>
-        ${freqTable(arr.info, 'arr')}
+        <h3>Arr frequencies · ${esc(o.destination ? o.destination.icao : '')}${arr.siFreqs ? ' <span class="h-note">SI</span>' : ''}</h3>
+        ${arr.siFreqs ? siFreqTable(arr.siFreqs) : freqTable(arr.info, 'arr')}
         ${airportInfoLines(arr.info)}
       </div>
     </div>
@@ -410,7 +424,7 @@ function networkNotes(net) {
   }
   if (n === 'sayintentions') {
     return `<h3>SayIntentions notes</h3><div class="lostcomms"><ul style="margin:0;padding-left:4mm">
-      <li>Global 24/7; SI uses Navigraph AIRAC freqs — this sheet's numbers match. Positions with several published freqs: SI accepts <b>any</b> of them.</li>
+      <li>Frequencies here come from <b>SI's own comms list</b>, one per position. Split-complex fields (KOAK, KLAX) have a second tower/ground freq — shown as "alt": if you get no reply, try it.</li>
       <li>SI picks its <b>own</b> active runways (may differ from real-world flow) — the SI ATIS line on this sheet is the authority.</li>
       <li>SI reads your SimBrief plan — IFR requires it filed before connecting; clearance will match this sheet.</li>
       <li>Intra-European Mode S flights: squawk <b>1000</b> is normal, not an error.</li>
