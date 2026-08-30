@@ -424,7 +424,7 @@ function networkNotes(net) {
   }
   if (n === 'sayintentions') {
     return `<h3>SayIntentions notes</h3><div class="lostcomms"><ul style="margin:0;padding-left:4mm">
-      <li>Frequencies here come from <b>SI's own comms list</b>, one per position. Split-complex fields (KOAK, KLAX) have a second tower/ground freq — shown as "alt": if you get no reply, try it.</li>
+      <li>Frequencies mirror <b>SI's own airport lookup</b> — the ones SI actually uses. Where the real world splits a field (KOAK North/South, KLAX north/south complexes) SI runs a single tower/ground: the other real-world freq is deliberately not printed, because SI does not answer on it.</li>
       <li>SI picks its <b>own</b> active runways (may differ from real-world flow) — the SI ATIS line on this sheet is the authority.</li>
       <li>SI reads your SimBrief plan — IFR requires it filed before connecting; clearance will match this sheet.</li>
       <li>Intra-European Mode S flights: squawk <b>1000</b> is normal, not an error.</li>

@@ -4,8 +4,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { parseSiAtis, collapseComms, keyFromFlightJson } = require('../lib/sayintentions');
 
-// Real getWX comms payload for KOAK (fetched 2026-08-30) — the split-tower
-// case that sent the pilot "into the void".
+// Real getWX comms payloads (fetched 2026-08-30), in the API's own array
+// order — order is load-bearing for the client-mirroring filter.
 const KOAK_COMMS = [
   { callsign: 'NORCAL', freq: '125.35', type: 'APP' },
   { callsign: 'NORCAL', freq: '128.325', type: 'APP' },
@@ -14,35 +14,68 @@ const KOAK_COMMS = [
   { callsign: 'OAKLAND', freq: '121.1', type: 'CLR' },
   { callsign: 'OAKLAND', freq: '122.95', type: 'CTAF' },
   { callsign: 'NORCAL', freq: '120.9', type: 'DEP' },
+  { callsign: 'NORCAL', freq: '127', type: 'DEP' },
+  { callsign: 'NORCAL', freq: '135.1', type: 'DEP' },
   { callsign: 'OAKLAND', freq: '122.5', type: 'FSS' },
   { callsign: 'OAKLAND', freq: '121.75', type: 'GND' },
   { callsign: 'OAKLAND', freq: '121.9', type: 'GND' },
   { callsign: 'OAKLAND', freq: '118.3', type: 'TWR' },
   { callsign: 'OAKLAND', freq: '127.2', type: 'TWR' },
 ];
+// EGLL ground: callsign:null in slot 1 -> SI's client shows all three.
+const EGLL_COMMS = [
+  { callsign: null, freq: '121.705', type: 'GND' },
+  { callsign: null, freq: '121.855', type: 'GND' },
+  { callsign: null, freq: '121.905', type: 'GND' },
+  { callsign: 'HEATHROW', freq: '118.505', type: 'TWR' },
+  { callsign: 'HEATHROW', freq: '118.705', type: 'TWR' },
+  { callsign: 'HEATHROW', freq: '124.48', type: 'TWR' },
+];
+// YSSY tower: slot 1 is callsign:null -> all four shown.
+const YSSY_COMMS = [
+  { callsign: 'SYDNEY', freq: '121.7', type: 'GND' },
+  { callsign: 'SYDNEY', freq: '126.5', type: 'GND' },
+  { callsign: 'SYDNEY', freq: '133.95', type: 'TWR' },
+  { callsign: null, freq: '120.5', type: 'TWR' },
+  { callsign: null, freq: '124.7', type: 'TWR' },
+  { callsign: null, freq: '119.45', type: 'TWR' },
+  { callsign: 'SYDNEY COORDINATOR', freq: '127.6', type: 'AIR' },
+];
 
-test('SI comms collapse to exactly one row per position', () => {
+test('KOAK: the frequency SI hides (TWR 127.2) is never printed', () => {
   const rows = collapseComms(KOAK_COMMS);
-  const types = rows.map(r => r.type);
-  assert.equal(new Set(types).size, types.length, 'no duplicate position rows');
   const twr = rows.find(r => r.type === 'TWR');
   assert.equal(twr.mhz, 118.3);
-  assert.equal(twr.altCount, 1, 'the second tower freq is recorded, not printed twice');
-  assert.deepEqual(twr.all, [118.3, 127.2]);
-  assert.equal(rows.find(r => r.type === 'GND').altCount, 1);
-  assert.equal(rows.find(r => r.type === 'ATIS').altCount, 0);
+  assert.equal(twr.altCount, 0, '127.2 is hidden by SI itself — printing it sends the pilot into the void');
+  assert.deepEqual(twr.all, [118.3]);
+  const gnd = rows.find(r => r.type === 'GND');
+  assert.deepEqual(gnd.all, [121.75], 'GND 121.9 hidden too');
+  // callsigned slot-1 entries hidden for every type
+  assert.deepEqual(rows.find(r => r.type === 'APP').all, [125.35, 135.1]);
+  assert.deepEqual(rows.find(r => r.type === 'DEP').all, [120.9, 135.1]);
 });
 
-test('SI comms: ramp control dropped, duplicates deduped, order is kneeboard order', () => {
-  const rows = collapseComms([
-    ...KOAK_COMMS,
-    { callsign: 'LAX', freq: '129.325', type: 'RMP' },
-    { callsign: 'SNA', freq: '118.0', type: 'CLR' },
-    { callsign: 'SNA', freq: '118.0', type: 'CLR' },
-  ]);
+test('null-callsign slot 1 is NOT hidden (EGLL ground, YSSY tower)', () => {
+  const gnd = collapseComms(EGLL_COMMS).find(r => r.type === 'GND');
+  assert.deepEqual(gnd.all, [121.705, 121.855, 121.905], 'all three EGLL grounds survive');
+  const etwr = collapseComms(EGLL_COMMS).find(r => r.type === 'TWR');
+  assert.deepEqual(etwr.all, [118.505, 124.48], 'callsigned 118.705 hidden');
+  const ytwr = collapseComms(YSSY_COMMS).find(r => r.type === 'TWR');
+  assert.deepEqual(ytwr.all, [133.95, 120.5, 124.7, 119.45], 'YSSY keeps all four (slot 1 has no callsign)');
+  assert.deepEqual(collapseComms(YSSY_COMMS).find(r => r.type === 'GND').all, [121.7]);
+});
+
+test('SI comms: ramp/air dropped, duplicates deduped, kneeboard order', () => {
+  const rows = collapseComms([...KOAK_COMMS, { callsign: 'LAX', freq: '129.325', type: 'RMP' }]);
   assert.ok(!rows.some(r => r.type === 'RMP'), 'ramp control is noise on a kneeboard');
-  assert.equal(rows.find(r => r.type === 'CLR').all.length, 2, 'duplicate 118.0 collapsed');
+  assert.ok(!collapseComms(YSSY_COMMS).some(r => r.type === 'AIR'), 'AIR is not rendered by SI either');
   assert.deepEqual(rows.map(r => r.type).slice(0, 4), ['ATIS', 'CLR', 'GND', 'TWR']);
+  // KSNA really does list CLR 118.0 twice (slots 0 and 1)
+  const clr = collapseComms([
+    { callsign: null, freq: '118.0', type: 'CLR' },
+    { callsign: null, freq: '118.0', type: 'CLR' },
+  ]).find(r => r.type === 'CLR');
+  assert.deepEqual(clr.all, [118], 'duplicate 118.0 deduped to one row');
 });
 
 test('SI api key is found in the real nested flight.json shape', () => {
