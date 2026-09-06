@@ -70,3 +70,15 @@ dependency (adm-zip). Node >= 18.4.
   `APCH_BEAR` and Navigraph courses are MAGNETIC. Don't mix them.
 - The v2 SimBrief JSON dict-wraps nothing (unlike json=1), but empty scalars
   are `[]`/`''` — see invariant 3.
+- **Never print a CTAF that SI didn't publish.** SI's `getWX` returns CTAF only
+  for US fields that really have one (KOAK 122.95, KFHR 128.25; KSAN correctly
+  has none). SI's *client* fills in 122.9 for everything else — that value is a
+  UI placeholder, not a frequency anyone listens on. Verified across 16
+  airports, 2026-09-06.
+- SI hides the **second entry of each type** in its own comms list when that
+  entry has a callsign (KOAK TWR 127.2, KLAX TWR 133.9). `siVisibleComms()`
+  mirrors that deliberately; array order is load-bearing, so never sort before
+  filtering.
+- Region is decided by `isUsIcao()` in lib/sheetmodel.js and reaches the client
+  as `wx.isUS`. It drives the altimeter's primary unit, feet vs metres, and
+  which lost-comms procedure prints. Don't re-derive it in the renderer.
