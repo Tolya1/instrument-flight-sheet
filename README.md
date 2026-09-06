@@ -56,6 +56,22 @@ Optional: with a Navigraph subscription and X-Plane, `tools/extract-navdata.js`
 builds a worldwide AIRAC-current ILS dataset from your own installed navdata
 (personal use only — the output stays in gitignored `data/`).
 
+## Navdata on a headless host
+
+`tools/extract-navdata.js` reads the X-Plane install, so a server that isn't the
+sim PC can only refresh navdata if it can see that folder. Either push it from
+the sim PC (`update-navdata.cmd` extracts, reloads locally and scp's to the
+host), or mount the PC's X-Plane folder read-only on the host and let
+`tools/nas-navdata-cron.sh` do it there — it extracts when the folder is
+readable and otherwise logs the current cycle and why it did nothing.
+
+```
+17 6 * * 1 $HOME/instrument-flight-sheet/tools/nas-navdata-cron.sh
+```
+
+Set `XPLANE_DIR` if the mount isn't at `/srv/xplane`. On Debian the mount needs
+`cifs-utils`; share the `X-Plane 12` folder read-only from the PC.
+
 ## Data sources (all keyless)
 
 - **SimBrief** `xml.fetcher.php?userid=...&json=v2` — OFP, weights, fuel,
