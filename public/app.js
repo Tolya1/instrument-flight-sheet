@@ -81,24 +81,45 @@ function freqTable(info, mode) {
 
 // showIls: false on the departure side — approach aids are dead weight when
 // you're leaving; the arrival and alternate blocks keep them.
-function airportInfoLines(info, { showIls = true } = {}) {
+function airportInfoLines(info, { showIls = true, metres = false } = {}) {
   if (!info) return `<div class="hw-hint">airport not in database</div>`;
+  const M = ft => Math.round(ft * 0.3048);
   const rwys = info.runways.map(r => {
     const likelyEnd = r.ends.find(e => e.likely);
     const pair = `${esc(r.leIdent)}/${esc(r.heIdent)}`;
-    const dims = r.lengthFt ? `${r.lengthFt.toLocaleString('en-US')}×${r.widthFt || '?'} ${esc((r.surface || '').slice(0, 4).toUpperCase())}` : '';
+    // ICAO states publish runways in metres — show those first outside the US,
+    // with feet kept alongside since the sim/charts often quote them.
+    const dims = r.lengthFt
+      ? (metres
+        ? `${M(r.lengthFt).toLocaleString('en-US')}×${r.widthFt ? M(r.widthFt) : '?'} m <span class="hw-hint" style="font-style:normal">(${r.lengthFt.toLocaleString('en-US')} ft)</span> ${esc((r.surface || '').slice(0, 4).toUpperCase())}`
+        : `${r.lengthFt.toLocaleString('en-US')}×${r.widthFt || '?'} ${esc((r.surface || '').slice(0, 4).toUpperCase())}`)
+      : '';
     const ils = !showIls ? '' : r.ends.filter(e => e.ils).map(e =>
       `<span class="ils">${e.ils.type && /LOC/i.test(e.ils.type) && !/ILS/i.test(e.ils.type) ? 'LOC' : 'ILS'} ${esc(e.ident)} ${e.ils.locFreq.toFixed(2).replace(/0$/, '')}${e.ils.course != null ? ` c${String(e.ils.course).padStart(3, '0')}°` : ''}</span>`
     ).join(' · ');
     return `<div class="rwyline"><span>${likelyEnd ? `<span class="likely">${pair}</span>` : pair} ${dims}</span><span>${ils}</span></div>`;
   }).join('');
   return `<div class="apinfo">
-    <div class="rwyline"><span>Elev <b>${info.elevation != null ? info.elevation + ' ft' : '—'}</b></span><span>${esc(info.municipality || '')}</span></div>
+    <div class="rwyline"><span>Elev <b>${info.elevation != null ? info.elevation + ' ft' : '—'}</b>${metres && info.elevation != null ? ` <span class="hw-hint" style="font-style:normal">(${M(info.elevation)} m)</span>` : ''}</span><span>${esc(info.municipality || '')}</span></div>
     ${rwys}
   </div>`;
 }
 
 /* ---------------- weather ---------------- */
+// Set what the station reports: A-group fields (US) get inches large, Q-group
+// fields (most of the world) get hectopascals large. Printing 29.83 first at
+// EPWA is as wrong as printing 1010 first at KSAN.
+function altimeter(p) {
+  if (!p) return '';
+  const inHg = p.altimInHg != null ? p.altimInHg.toFixed(2) : null;
+  const hPa = p.altimHpa != null ? String(Math.round(p.altimHpa)) : null;
+  if (inHg == null && hPa == null) return '';
+  const hpaFirst = p.altimUnit === 'hPa';
+  const big = hpaFirst ? (hPa && hPa + ' hPa') : inHg;
+  const small = hpaFirst ? inHg : (hPa && hPa + ' hPa');
+  return `<span class="alt-inhg">${esc(big || '')}</span>${small ? `<span class="alt-hpa">${esc(small)}</span>` : ''}`;
+}
+
 function windText(p) {
   if (!p) return '—';
   if (p.windVrb) return `VRB ${p.windSpd ?? '?'} kt`;
@@ -132,7 +153,7 @@ function wxBox(title, side, apInfo) {
     <h3>${esc(title)} <span class="h-note">${wx.source === 'awc' ? 'live' : 'from OFP'} · ${stale}</span></h3>
     <div class="raw">${esc(wx.raw)}</div>
     <div class="decoded">
-      ${p.altimInHg != null ? `<span class="alt-inhg">${p.altimInHg.toFixed(2)}</span><span class="alt-hpa">${p.altimHpa != null ? Math.round(p.altimHpa) + ' hPa' : ''}</span>` : ''}
+      ${altimeter(p)}
       <span>${windText(p)}</span>
       ${p.tempC != null ? `<span>${p.tempC}/${p.dewC != null ? p.dewC : '—'}°C</span>` : ''}
       ${wx.fltCat ? `<span class="cat">${esc(wx.fltCat)}</span>` : ''}
@@ -243,12 +264,12 @@ function frontPage(m) {
       <div class="box">
         <h3>Dep frequencies · ${esc(o.origin ? o.origin.icao : '')}${dep.siFreqs ? ' <span class="h-note">SI</span>' : ''}</h3>
         ${dep.siFreqs ? siFreqTable(dep.siFreqs) : freqTable(dep.info, 'dep')}
-        ${airportInfoLines(dep.info, { showIls: false })}
+        ${airportInfoLines(dep.info, { showIls: false, metres: dep.wx && dep.wx.isUS === false })}
       </div>
       <div class="box">
         <h3>Arr frequencies · ${esc(o.destination ? o.destination.icao : '')}${arr.siFreqs ? ' <span class="h-note">SI</span>' : ''}</h3>
         ${arr.siFreqs ? siFreqTable(arr.siFreqs) : freqTable(arr.info, 'arr')}
-        ${airportInfoLines(arr.info)}
+        ${airportInfoLines(arr.info, { metres: arr.wx && arr.wx.isUS === false })}
       </div>
     </div>
 
@@ -361,14 +382,7 @@ function backPage(m) {
 
     <div class="cols2">
       <div class="box lostcomms">
-        <h3>Lost comms — 91.185 <span class="h-note">squawk 7600</span></h3>
-        <ul style="margin:0;padding-left:4mm">
-          <li><b>VMC:</b> remain VMC, land as soon as practicable.</li>
-          <li><b>Route (AVEF):</b> <b>A</b>ssigned → <b>V</b>ectored (fly direct) → <b>E</b>xpected → <b>F</b>iled.</li>
-          <li><b>Altitude (MEA):</b> highest of <b>M</b>inimum IFR alt, <b>E</b>xpected, <b>A</b>ssigned — per segment.</li>
-          <li><b>Clearance limit w/ EFC:</b> leave holding at EFC; at a fix: begin approach as close as able to ETA.</li>
-          <li>PE tip: try text/private message before going full 7600.</li>
-        </ul>
+        ${lostCommsCrib(m)}
       </div>
       <div class="box">
         ${networkNotes(m.network)}
@@ -382,6 +396,33 @@ function backPage(m) {
 
     ${foot(m, 2)}
   </section>`;
+}
+
+// Lost comms is national law, not a universal procedure: FAR 91.185 applies in
+// US airspace only. Keyed off the destination, since that's where you'd fly the
+// procedure. ICAO/SERA differs most in the route rule (continue per the plan,
+// no "vectored/expected" ladder) and in the descent timing.
+function lostCommsCrib(m) {
+  const dest = m.ofp.destination ? m.ofp.destination.icao : '';
+  const us = m.arr && m.arr.wx ? m.arr.wx.isUS !== false : true;
+  if (us) {
+    return `<h3>Lost comms — FAR 91.185 <span class="h-note">squawk 7600 · US</span></h3>
+      <ul style="margin:0;padding-left:4mm">
+        <li><b>VMC:</b> remain VMC, land as soon as practicable.</li>
+        <li><b>Route (AVEF):</b> <b>A</b>ssigned → <b>V</b>ectored (fly direct) → <b>E</b>xpected → <b>F</b>iled.</li>
+        <li><b>Altitude (MEA):</b> highest of <b>M</b>inimum IFR alt, <b>E</b>xpected, <b>A</b>ssigned — per segment.</li>
+        <li><b>Clearance limit w/ EFC:</b> leave holding at EFC; at a fix: begin approach as close as able to ETA.</li>
+        <li>Try text / private message before going full 7600.</li>
+      </ul>`;
+  }
+  return `<h3>Lost comms — ICAO / SERA <span class="h-note">squawk 7600 · ${esc(dest.slice(0, 2))}…</span></h3>
+    <ul style="margin:0;padding-left:4mm">
+      <li><b>VMC:</b> continue VMC, land at the nearest suitable aerodrome, report arrival.</li>
+      <li><b>IMC — route:</b> maintain the <b>last assigned</b> speed and level for <b>7 min</b> (SERA: from the last position report or the point of failure), then continue per the <b>filed flight plan</b>.</li>
+      <li><b>Descent:</b> proceed to the arrival aid, hold if needed until the <b>EAT</b>, then commence the approach as close as possible to it (or ETA if no EAT).</li>
+      <li>Land within <b>30 min</b> of the EAT/ETA.</li>
+      <li>Local variations exist — check the state AIP if it matters for the flight.</li>
+    </ul>`;
 }
 
 const NET_NAMES = { pilotedge: 'PilotEdge', sayintentions: 'SayIntentions', vatsim: 'VATSIM' };

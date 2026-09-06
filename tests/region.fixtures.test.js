@@ -114,9 +114,35 @@ test('stale/future observation flags (never a silent stale altimeter)', () => {
   assert.equal(future.stale, true, 'future obs flagged as suspect');
 });
 
-// ---- Known regional gaps, on the record until implemented ----
-test('altimeter PRIMARY unit should follow the METAR group (Q -> hPa first)', { todo: 'client renders inHg-first everywhere; planned: auto-detect from A/Q group' }, () => {});
-test('lost-comms crib should be region-appropriate (91.185 is FAA-only)', { todo: 'client back page is static FAA text; planned: per-region static content by ICAO prefix' }, () => {});
+// ---- regional conventions ----
+test('altimeter primary unit follows the METAR group, per airport', () => {
+  for (const [region, raw] of Object.entries(REGIONS)) {
+    for (const side of ['origin', 'destination']) {
+      const wx = wxBlock(raw[side].icao_code, null, raw[side].metar, null, null);
+      const expected = /\bQ\d{4}\b/.test(raw[side].metar) ? 'hPa' : 'inHg';
+      assert.equal(wx.parsed.altimUnit, expected, `${region}/${side}: altimeter unit`);
+      assert.ok(wx.parsed.altimInHg > 25 && wx.parsed.altimHpa > 900, 'both values stay available');
+    }
+  }
+});
+
+test('no METAR: altimeter unit falls back to the region, not to inches', () => {
+  assert.equal(wxBlock('EDDF', null, null, null, null).parsed.altimUnit, 'hPa');
+  assert.equal(wxBlock('KSAN', null, null, null, null).parsed.altimUnit, 'inHg');
+  assert.equal(wxBlock('PANC', null, null, null, null).parsed.altimUnit, 'inHg', 'Alaska is US');
+  assert.equal(wxBlock('TJSJ', null, null, null, null).parsed.altimUnit, 'inHg', 'Puerto Rico is US');
+});
+
+test('US vs ICAO region flag drives units and the lost-comms crib', () => {
+  const { isUsIcao } = require('../lib/sheetmodel');
+  for (const icao of ['KSAN', 'PANC', 'PHNL', 'TJSJ', 'PABE']) assert.ok(isUsIcao(icao), `${icao} is US`);
+  for (const icao of ['EPWA', 'EDDF', 'EGLL', 'RJTT', 'FAOR', 'YSSY', 'CYYZ', 'MMMX']) {
+    assert.ok(!isUsIcao(icao), `${icao} is not US`);
+  }
+  // the flag the client renders from travels on the wx block
+  assert.equal(wxBlock('YSSY', null, null, null, null).isUS, false);
+  assert.equal(wxBlock('KSAN', null, null, null, null).isUS, true);
+});
 test('network auto-resolution: PE inside coverage, SayIntentions outside, manual wins', () => {
   const { resolveNetwork } = require('../lib/sheetmodel');
   const pe = normalizeOfp(makeOfp({ from: 'KSAN', to: 'KSBA', firFrom: 'KZLA', firTo: 'KZLA' }));
@@ -134,4 +160,12 @@ test('network auto-resolution: PE inside coverage, SayIntentions outside, manual
   const noFir = normalizeOfp(makeOfp({ from: 'KSAN', to: 'KSBA' }));
   assert.equal(resolveNetwork('auto', noFir).resolved, 'sayintentions');
 });
-test('runway dimensions should show meters outside the US', { todo: 'client prints feet only; planned: dual ft/m for non-K/P idents' }, () => {});
+test('every regional fixture carries the isUS flag the renderer needs', () => {
+  const expectUS = { us: true, europe: false, asia: false, africa: false, oceania: false };
+  for (const [region, raw] of Object.entries(REGIONS)) {
+    for (const side of ['origin', 'destination']) {
+      const wx = wxBlock(raw[side].icao_code, null, raw[side].metar, null, null);
+      assert.equal(wx.isUS, expectUS[region], `${region}/${side}: isUS`);
+    }
+  }
+});
